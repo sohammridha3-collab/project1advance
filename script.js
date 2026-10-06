@@ -1,5 +1,5 @@
 // ===== Config =====
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://project1advance-1.onrender.com";
 
 // Fields copied exactly from the StudentInput Pydantic model in main.py
 const num = (name, label, min, max, step, hint, ph) => ({ name, label, type: "number", min, max, step, hint, ph, req: true });
@@ -9,14 +9,14 @@ const FIELDS = [
   sel("Gender", "Gender", ["Male", "Female"]),
   { name: "Country", label: "Country", type: "text", hint: "Optional. Unlisted countries are grouped as 'Other'.", ph: "e.g. Canada", req: false },
   sel("Academic_Level", "Academic level", ["Undergraduate", "Graduate", "High School"]),
-  sel("Most_Used_Platform", "Most used platform", ["Instagram","Facebook","WhatsApp","LinkedIn","Snapchat","TikTok","YouTube","Twitter","VKontakte","KakaoTalk","LINE","WeChat"]),
-  sel("Purpose_Of_Use", "Main purpose of use", ["Entertainment","Education","Networking","News"]),
+  sel("Most_Used_Platform", "Most used platform", ["Instagram", "Facebook", "WhatsApp", "LinkedIn", "Snapchat", "TikTok", "YouTube", "Twitter", "VKontakte", "KakaoTalk", "LINE", "WeChat"]),
+  sel("Purpose_Of_Use", "Main purpose of use", ["Entertainment", "Education", "Networking", "News"]),
   num("Avg_Daily_Usage_Hours", "Daily social media hours", 0, 24, 0.1, "Hours per day (0–24)", 4.6),
   num("Daily_Unlocks", "Daily phone unlocks", 0, 1000, 1, "Times per day (0–1000)", 166),
   num("Study_Hours", "Daily study hours", 0, 24, 0.1, "Hours per day (0–24)", 4),
   num("Physical_Activity_Hours", "Daily physical activity hours", 0, 24, 0.1, "Hours per day (0–24)", 1.8),
   num("Sleep_Hours_Per_Night", "Sleep hours per night", 0, 24, 0.1, "Hours per night (0–24)", 6.7),
-  sel("Stress_Level", "Stress level", ["Low","Medium","High","Very High"], "Perceived stress"),
+  sel("Stress_Level", "Stress level", ["Low", "Medium", "High", "Very High"], "Perceived stress"),
 ];
 const INTEGER_FIELDS = ["Age", "Daily_Unlocks"];
 
