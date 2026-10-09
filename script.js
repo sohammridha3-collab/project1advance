@@ -134,7 +134,7 @@ form.addEventListener("submit", async (ev) => {
 
   const waitTimer = setTimeout(() => {
     if (loaderText && !loader.hidden) {
-      loaderText.textContent = "Connecting to server (waking up cloud service if sleeping, please wait)...";
+      loaderText.textContent = "Connecting to server (waking up cloud service if sleeping, please wait up to 1-2 minutes)...";
     }
   }, 2500);
 
@@ -149,7 +149,7 @@ form.addEventListener("submit", async (ev) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,
-      }, 7000);
+      }, 90000);
 
       if (!res.ok) {
         let errDetail = "";
