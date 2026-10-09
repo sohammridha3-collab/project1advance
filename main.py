@@ -67,6 +67,13 @@ app = FastAPI(
 local_frontend_origins = [
     "http://localhost:5500",
     "http://127.0.0.1:5500",
+    "http://localhost:5501",
+    "http://127.0.0.1:5501",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "null",
 ]
 production_frontend_origins = [
     origin.strip()
@@ -80,6 +87,7 @@ if "*" in production_frontend_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=local_frontend_origins + production_frontend_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

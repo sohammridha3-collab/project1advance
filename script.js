@@ -1,5 +1,35 @@
-// ===== Config =====
-const API_BASE_URL = "https://project1advance-1.onrender.com";
+// ===== Config & API Resolution =====
+function getCandidateApiUrls() {
+  const origin = window.location.origin;
+  const isLocal = !origin || origin.startsWith("file:") ||
+                  window.location.hostname === "localhost" ||
+                  window.location.hostname === "127.0.0.1";
+
+  if (isLocal) {
+    // If running directly on FastAPI (e.g. port 8000), use same origin first
+    if (window.location.port === "8000") {
+      return [origin, "http://127.0.0.1:8000", "https://project1advance-1.onrender.com"];
+    }
+    // If running via Live Server (port 5500/5501) or file://, prefer local backend
+    return ["http://127.0.0.1:8000", "http://localhost:8000", "https://project1advance-1.onrender.com"];
+  }
+
+  // Deployed production environment (e.g. Render)
+  return [origin, "https://project1advance-1.onrender.com", "http://127.0.0.1:8000"];
+}
+
+async function fetchWithTimeout(url, options, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
 
 // Fields copied exactly from the StudentInput Pydantic model in main.py
 const num = (name, label, min, max, step, hint, ph) => ({ name, label, type: "number", min, max, step, hint, ph, req: true });
@@ -80,11 +110,12 @@ function showError(msg) {
   e.textContent = msg + " You can fix the issue and press Analyze to retry.";
   e.hidden = false;
 }
-function describeHttpError(status, body) {
-  if (status === 422) return "The server rejected some values (HTTP 422). Please check every field.";
-  if (status === 503) return "The prediction model isn't loaded on the server (HTTP 503).";
-  if (status >= 500) return `The server hit an error while predicting (HTTP ${status}).`;
-  return `The request failed (HTTP ${status}).`;
+function describeHttpError(status, detail) {
+  if (detail) return `Server error (${status}): ${detail}`;
+  if (status === 422) return "The server rejected some values (HTTP 422). Please verify all inputs.";
+  if (status === 503) return "The prediction model isn't loaded on the server (HTTP 503). Ensure Mental_Health_Model.pkl exists.";
+  if (status >= 500) return `The server hit an internal error while predicting (HTTP ${status}).`;
+  return `The request failed with HTTP ${status}.`;
 }
 
 // ===== Submit =====
@@ -92,25 +123,73 @@ form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   $("error").hidden = true;
   if (!validate()) return showError("Some fields need attention.");
+
   const btn = $("analyze");
   btn.disabled = true;
-  $("loader").hidden = false;
-  try {
-    const res = await fetch(`${API_BASE_URL}/predict`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload()),
-    });
-    if (!res.ok) throw { http: res.status };
-    renderResult(await res.json());
+
+  const loader = $("loader");
+  const loaderText = loader.querySelector("p");
+  if (loaderText) loaderText.textContent = "Analyzing student data...";
+  loader.hidden = false;
+
+  const waitTimer = setTimeout(() => {
+    if (loaderText && !loader.hidden) {
+      loaderText.textContent = "Connecting to server (waking up cloud service if sleeping, please wait)...";
+    }
+  }, 2500);
+
+  const payload = JSON.stringify(buildPayload());
+  const candidateUrls = [...new Set(getCandidateApiUrls().filter(Boolean))];
+  let lastError = null;
+  let successResult = null;
+
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetchWithTimeout(`${baseUrl}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }, 7000);
+
+      if (!res.ok) {
+        let errDetail = "";
+        try {
+          const errBody = await res.json();
+          if (errBody && errBody.detail) {
+            errDetail = Array.isArray(errBody.detail)
+              ? errBody.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
+              : String(errBody.detail);
+          }
+        } catch (_) {}
+        throw { http: res.status, detail: errDetail, url: baseUrl };
+      }
+
+      successResult = await res.json();
+      break;
+    } catch (err) {
+      lastError = err;
+      // If server responded with an HTTP status code (e.g. 422), do not retry another server since this server is responding
+      if (err.http) {
+        break;
+      }
+    }
+  }
+
+  clearTimeout(waitTimer);
+  loader.hidden = true;
+  btn.disabled = false;
+
+  if (successResult) {
+    renderResult(successResult);
     showResult();
-  } catch (err) {
-    showError(err.http
-      ? describeHttpError(err.http)
-      : "Can't reach the prediction server at " + API_BASE_URL + ". Check that the backend is running and open this page from http://127.0.0.1:8000.");
-  } finally {
-    $("loader").hidden = true;
-    btn.disabled = false;
+  } else {
+    if (lastError && lastError.http) {
+      showError(describeHttpError(lastError.http, lastError.detail));
+    } else {
+      showError(
+        "Could not connect to the prediction server. Please make sure the local server is running by executing: python -m uvicorn main:app --host 127.0.0.1 --port 8000"
+      );
+    }
   }
 });
 
