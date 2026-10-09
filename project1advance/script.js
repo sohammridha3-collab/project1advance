@@ -5,17 +5,19 @@ function getCandidateApiUrls() {
                   window.location.hostname === "localhost" ||
                   window.location.hostname === "127.0.0.1";
 
+  // The deployed backend Web Service URL
+  const BACKEND_URL = "https://project1advance-1.onrender.com";
+
   if (isLocal) {
-    // If running directly on FastAPI (e.g. port 8000), use same origin first
     if (window.location.port === "8000") {
-      return [origin, "http://127.0.0.1:8000", "https://project1advance-1.onrender.com"];
+      return [origin, "http://127.0.0.1:8000", BACKEND_URL];
     }
-    // If running via Live Server (port 5500/5501) or file://, prefer local backend
-    return ["http://127.0.0.1:8000", "http://localhost:8000", "https://project1advance-1.onrender.com"];
+    return ["http://127.0.0.1:8000", "http://localhost:8000", BACKEND_URL];
   }
 
-  // Deployed production environment (e.g. Render)
-  return [origin, "https://project1advance-1.onrender.com", "http://127.0.0.1:8000"];
+  // If on the deployed frontend Static Site (e.g. project1adv.onrender.com),
+  // we must make requests to the backend Web Service URL.
+  return [BACKEND_URL, origin, "http://127.0.0.1:8000"];
 }
 
 async function fetchWithTimeout(url, options, timeoutMs = 8000) {

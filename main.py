@@ -76,6 +76,9 @@ local_frontend_origins = [
     "null",
 ]
 production_frontend_origins = [
+    "https://project1adv.onrender.com",
+    "https://project1advance.onrender.com",
+] + [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
