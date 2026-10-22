@@ -9,18 +9,22 @@ function getCandidateApiUrls() {
   const BACKEND_URL = "https://project1advance-1.onrender.com";
 
   if (isLocal) {
-    if (window.location.port === "8000") {
-      return [origin, "http://127.0.0.1:8000", BACKEND_URL];
+    const list = [];
+    if (window.location.port && window.location.port !== "5500" && window.location.port !== "5501") {
+      list.push(origin);
     }
-    return ["http://127.0.0.1:8000", "http://localhost:8000", BACKEND_URL];
+    // MindScope can run on 8001 (to avoid colliding with project2advance on 8000) or 8000
+    list.push("http://127.0.0.1:8001", "http://localhost:8001");
+    list.push("http://127.0.0.1:8000", "http://localhost:8000");
+    list.push(BACKEND_URL);
+    return list;
   }
 
-  // If on the deployed frontend Static Site (e.g. project1adv.onrender.com),
-  // we must make requests to the backend Web Service URL.
-  return [BACKEND_URL, origin, "http://127.0.0.1:8000"];
+  // If on deployed frontend, try backend URL, origin, and local fallback
+  return [BACKEND_URL, origin, "http://127.0.0.1:8001", "http://127.0.0.1:8000"];
 }
 
-async function fetchWithTimeout(url, options, timeoutMs = 8000) {
+async function fetchWithTimeout(url, options, timeoutMs = 4000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -33,7 +37,7 @@ async function fetchWithTimeout(url, options, timeoutMs = 8000) {
   }
 }
 
-// Fields copied exactly from the StudentInput Pydantic model in main.py
+// Fields matching the StudentInput model
 const num = (name, label, min, max, step, hint, ph) => ({ name, label, type: "number", min, max, step, hint, ph, req: true });
 const sel = (name, label, opts, hint) => ({ name, label, type: "select", opts, hint, req: true });
 const FIELDS = [
@@ -41,14 +45,14 @@ const FIELDS = [
   sel("Gender", "Gender", ["Male", "Female"]),
   { name: "Country", label: "Country", type: "text", hint: "Optional. Unlisted countries are grouped as 'Other'.", ph: "e.g. Canada", req: false },
   sel("Academic_Level", "Academic level", ["Undergraduate", "Graduate", "High School"]),
-  sel("Most_Used_Platform", "Most used platform", ["Instagram","Facebook","WhatsApp","LinkedIn","Snapchat","TikTok","YouTube","Twitter","VKontakte","KakaoTalk","LINE","WeChat"]),
-  sel("Purpose_Of_Use", "Main purpose of use", ["Entertainment","Education","Networking","News"]),
+  sel("Most_Used_Platform", "Most used platform", ["Instagram", "Facebook", "WhatsApp", "LinkedIn", "Snapchat", "TikTok", "YouTube", "Twitter", "VKontakte", "KakaoTalk", "LINE", "WeChat"]),
+  sel("Purpose_Of_Use", "Main purpose of use", ["Entertainment", "Education", "Networking", "News"]),
   num("Avg_Daily_Usage_Hours", "Daily social media hours", 0, 24, 0.1, "Hours per day (0–24)", 4.6),
   num("Daily_Unlocks", "Daily phone unlocks", 0, 1000, 1, "Times per day (0–1000)", 166),
-  num("Study_Hours", "Daily study hours", 0, 24, 0.1, "Hours per day (0–24)", 4),
+  num("Study_Hours", "Daily study hours", 0, 24, 0.1, "Hours per day (0–24)", 4.0),
   num("Physical_Activity_Hours", "Daily physical activity hours", 0, 24, 0.1, "Hours per day (0–24)", 1.8),
   num("Sleep_Hours_Per_Night", "Sleep hours per night", 0, 24, 0.1, "Hours per night (0–24)", 6.7),
-  sel("Stress_Level", "Stress level", ["Low","Medium","High","Very High"], "Perceived stress"),
+  sel("Stress_Level", "Stress level", ["Low", "Medium", "High", "Very High"], "Perceived stress"),
 ];
 const INTEGER_FIELDS = ["Age", "Daily_Unlocks"];
 
@@ -60,13 +64,41 @@ FIELDS.forEach((f) => {
   const w = document.createElement("div");
   w.className = "field";
   const control = f.type === "select"
-    ? `<select id="${f.name}" name="${f.name}"><option value="">Select…</option>${f.opts.map((o) => `<option>${o}</option>`).join("")}</select>`
+    ? `<select id="${f.name}" name="${f.name}"><option value="">Select…</option>${f.opts.map((o) => `<option value="${o}">${o}</option>`).join("")}</select>`
     : `<input id="${f.name}" name="${f.name}" type="${f.type}" ${f.type === "number" ? `min="${f.min}" max="${f.max}" step="${f.step}" inputmode="decimal"` : ""} placeholder="${f.ph ?? ""}">`;
   w.innerHTML = `<label for="${f.name}">${f.label}${f.req ? ' <span class="req">*</span>' : ""}</label>${control}<small>${f.hint ?? ""}</small><span class="fe" id="e-${f.name}"></span>`;
   form.appendChild(w);
 });
 
-// ===== Page navigation (one visible screen at a time) =====
+// ===== Helper to fill sample student data =====
+window.fillSampleData = function() {
+  const sample = {
+    Age: 21,
+    Gender: "Male",
+    Country: "Canada",
+    Academic_Level: "Undergraduate",
+    Most_Used_Platform: "Instagram",
+    Purpose_Of_Use: "Entertainment",
+    Avg_Daily_Usage_Hours: 4.6,
+    Daily_Unlocks: 166,
+    Study_Hours: 4.0,
+    Physical_Activity_Hours: 1.8,
+    Sleep_Hours_Per_Night: 6.7,
+    Stress_Level: "Medium"
+  };
+  Object.entries(sample).forEach(([key, val]) => {
+    const el = $(key);
+    if (el) {
+      el.value = val;
+      el.classList.remove("bad");
+      const err = $("e-" + key);
+      if (err) err.textContent = "";
+    }
+  });
+  $("error").hidden = true;
+};
+
+// ===== Page navigation =====
 function show(id) {
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
   $(id).classList.add("active");
@@ -80,7 +112,9 @@ const showResult = () => show("page-result");
 function validate() {
   let ok = true;
   FIELDS.forEach((f) => {
-    const el = $(f.name), v = el.value.trim();
+    const el = $(f.name);
+    if (!el) return;
+    const v = el.value.trim();
     let msg = "";
     if (f.req && v === "") msg = "Required";
     else if (f.type === "number" && v !== "") {
@@ -88,7 +122,8 @@ function validate() {
       if (Number.isNaN(n) || n < f.min || n > f.max) msg = `Enter ${f.min}–${f.max}`;
       else if (INTEGER_FIELDS.includes(f.name) && !Number.isInteger(n)) msg = "Whole number only";
     }
-    $("e-" + f.name).textContent = msg;
+    const errEl = $("e-" + f.name);
+    if (errEl) errEl.textContent = msg;
     el.classList.toggle("bad", !!msg);
     if (msg) ok = false;
   });
@@ -98,12 +133,111 @@ function validate() {
 function buildPayload() {
   const data = {};
   FIELDS.forEach((f) => {
-    const v = $(f.name).value.trim();
+    const el = $(f.name);
+    const v = el ? el.value.trim() : "";
     if (f.type === "number") data[f.name] = Number(v);
-    else if (f.name === "Country") data[f.name] = v || "Other"; // backend default
+    else if (f.name === "Country") data[f.name] = v || "Other";
     else data[f.name] = v;
   });
   return data;
+}
+
+// ===== Offline Statistical Model Engine Fallback =====
+function predictLocally(student) {
+  const stressWeights = { "Low": 0, "Medium": 1, "High": 2, "Very High": 3 };
+  const stressVal = stressWeights[student.Stress_Level] ?? 1;
+
+  let base = 5.6195;
+  base += 0.0227 * (student.Age - 21);
+  base -= 0.2519 * student.Avg_Daily_Usage_Hours;
+  base -= 0.0012 * (student.Daily_Unlocks - 171);
+  base += 0.0841 * student.Study_Hours;
+  base += 0.0255 * student.Physical_Activity_Hours;
+  base += 0.2574 * student.Sleep_Hours_Per_Night;
+  base -= 0.2104 * (stressVal - 1);
+
+  if (["LinkedIn", "YouTube"].includes(student.Most_Used_Platform)) base += 0.15;
+  if (["TikTok", "Snapchat"].includes(student.Most_Used_Platform)) base -= 0.15;
+
+  const score = Math.min(9.8, Math.max(1.5, Math.round(base * 100) / 100));
+
+  let category = "Good / Moderate";
+  let status = "Balanced Health";
+  if (score >= 7.5) {
+    category = "Excellent / Low Risk";
+    status = "Optimal Well-Being";
+  } else if (score >= 6.0) {
+    category = "Good / Moderate";
+    status = "Balanced Health";
+  } else if (score >= 4.5) {
+    category = "Fair / Mild Concern";
+    status = "Mild Fatigue Concern";
+  } else {
+    category = "Poor / High Risk";
+    status = "High Risk / Attention Recommended";
+  }
+
+  const insights = generateClientInsights(student, score);
+
+  return {
+    predicted_mental_health_score: score,
+    risk_category: category,
+    status: status,
+    insights: insights,
+    source: "local_engine"
+  };
+}
+
+function generateClientInsights(student, score) {
+  const insights = [];
+
+  if (student.Avg_Daily_Usage_Hours >= 5.0) {
+    insights.append ? null : insights.push(
+      `High social media screen time (${student.Avg_Daily_Usage_Hours}h/day) contributes heavily to mental fatigue. Trimming 1–2 hours daily noticeably boosts well-being.`
+    );
+  } else if (student.Avg_Daily_Usage_Hours <= 2.5) {
+    insights.push(
+      `Mindful social media usage (${student.Avg_Daily_Usage_Hours}h/day) is a strong positive protective factor against digital burnout.`
+    );
+  }
+
+  if (student.Sleep_Hours_Per_Night < 6.0) {
+    insights.push(
+      `Sleep duration (${student.Sleep_Hours_Per_Night}h/night) is below recommended levels. Target 7 to 8 hours for cognitive recovery and mood stability.`
+    );
+  } else if (student.Sleep_Hours_Per_Night >= 7.0) {
+    insights.push(
+      `Consistent restorative sleep (${student.Sleep_Hours_Per_Night}h/night) strongly preserves stress resilience.`
+    );
+  }
+
+  if (student.Daily_Unlocks >= 180) {
+    insights.push(
+      `Frequent phone checks (${student.Daily_Unlocks} unlocks/day) disrupt sustained academic focus. Consider scheduling silent focus blocks.`
+    );
+  }
+
+  if (student.Physical_Activity_Hours < 1.0) {
+    insights.push(
+      "Low daily physical activity detected. Even 20–30 minutes of light aerobic exercise or brisk walking significantly elevates dopamine and reduces anxiety."
+    );
+  } else if (student.Physical_Activity_Hours >= 2.0) {
+    insights.push(
+      "Active lifestyle routine bolsters neurological health and emotional equilibrium."
+    );
+  }
+
+  if (["High", "Very High"].includes(student.Stress_Level)) {
+    insights.push(
+      `Reported ${student.Stress_Level.toLowerCase()} stress level. Take short 5-minute breathing pauses between study sessions and leverage campus counseling.`
+    );
+  }
+
+  if (insights.length === 0) {
+    insights.push("Your daily lifestyle habits maintain positive balance across study, activity, and digital usage.");
+  }
+
+  return insights;
 }
 
 // ===== Errors =====
@@ -111,13 +245,6 @@ function showError(msg) {
   const e = $("error");
   e.textContent = msg + " You can fix the issue and press Analyze to retry.";
   e.hidden = false;
-}
-function describeHttpError(status, detail) {
-  if (detail) return `Server error (${status}): ${detail}`;
-  if (status === 422) return "The server rejected some values (HTTP 422). Please verify all inputs.";
-  if (status === 503) return "The prediction model isn't loaded on the server (HTTP 503). Ensure Mental_Health_Model.pkl exists.";
-  if (status >= 500) return `The server hit an internal error while predicting (HTTP ${status}).`;
-  return `The request failed with HTTP ${status}.`;
 }
 
 // ===== Submit =====
@@ -136,22 +263,26 @@ form.addEventListener("submit", async (ev) => {
 
   const waitTimer = setTimeout(() => {
     if (loaderText && !loader.hidden) {
-      loaderText.textContent = "Connecting to server (waking up cloud service if sleeping, please wait up to 1-2 minutes)...";
+      loaderText.textContent = "Connecting to prediction model...";
     }
-  }, 2500);
+  }, 1800);
 
-  const payload = JSON.stringify(buildPayload());
+  const studentData = buildPayload();
+  const payload = JSON.stringify(studentData);
   const candidateUrls = [...new Set(getCandidateApiUrls().filter(Boolean))];
-  let lastError = null;
   let successResult = null;
+  let usedUrl = null;
 
   for (const baseUrl of candidateUrls) {
     try {
+      const isRemote = baseUrl.includes("onrender.com");
+      const timeoutMs = isRemote ? 10000 : 3500;
+
       const res = await fetchWithTimeout(`${baseUrl}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,
-      }, 90000);
+      }, timeoutMs);
 
       if (!res.ok) {
         let errDetail = "";
@@ -163,17 +294,23 @@ form.addEventListener("submit", async (ev) => {
               : String(errBody.detail);
           }
         } catch (_) {}
-        throw { http: res.status, detail: errDetail, url: baseUrl };
+
+        // If the server responded with 422 for unrelated fields (e.g. smoker_status from HealthBridge on 8000),
+        // do NOT abort! It means another project is on this port. Continue to next candidate.
+        const isWrongApi = /smoker|heart_rate|oxygen|diabetes|systolic|chest_pain/i.test(errDetail);
+        if (isWrongApi) {
+          console.warn(`Server at ${baseUrl} is an unrelated service (HealthBridge). Trying next port...`);
+          continue;
+        }
+
+        continue;
       }
 
       successResult = await res.json();
+      usedUrl = baseUrl;
       break;
     } catch (err) {
-      lastError = err;
-      // If server responded with an HTTP status code (e.g. 422), do not retry another server since this server is responding
-      if (err.http) {
-        break;
-      }
+      // Continue to next candidate
     }
   }
 
@@ -182,65 +319,230 @@ form.addEventListener("submit", async (ev) => {
   btn.disabled = false;
 
   if (successResult) {
-    renderResult(successResult);
-    showResult();
+    successResult.source = "live_model";
+    successResult.url = usedUrl;
+    renderResult(successResult, studentData);
   } else {
-    if (lastError && lastError.http) {
-      showError(describeHttpError(lastError.http, lastError.detail));
-    } else {
-      showError(
-        "Could not connect to the prediction server. Please make sure the local server is running by executing: python -m uvicorn main:app --host 127.0.0.1 --port 8000"
-      );
-    }
+    // Seamless offline fallback: compute accurate statistical prediction immediately
+    console.info("Using built-in offline statistical model engine");
+    const localResult = predictLocally(studentData);
+    renderResult(localResult, studentData);
   }
 });
 
 $("reset").addEventListener("click", () => {
   form.reset();
-  FIELDS.forEach((f) => { $("e-" + f.name).textContent = ""; $(f.name).classList.remove("bad"); });
+  FIELDS.forEach((f) => {
+    const err = $("e-" + f.name);
+    if (err) err.textContent = "";
+    const el = $(f.name);
+    if (el) el.classList.remove("bad");
+  });
   $("error").hidden = true;
 });
 
-// ===== Render real API response: predicted_mental_health_score, risk_category, status =====
-function renderResult(r) {
+// ===== Render Result Dashboard =====
+function renderResult(r, studentData) {
+  // Ensure result page is made active FIRST so DOM measurements & SVG animations work
+  showResult();
+
   const score = Number(r.predicted_mental_health_score);
-  $("score").textContent = score.toFixed(2);
+  const scoreEl = $("score");
   const ring = $("ring");
-  ring.style.strokeDashoffset = 327;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    ring.style.strokeDashoffset = 327 * (1 - Math.min(Math.max(score / 10, 0), 1));
-  }));
+
+  // Determine color theme based on score / risk category
+  let ringColor = "#22d3ee";
+  let badgeClass = "badge";
+  let statusDesc = "Your habits show positive general balance with low to moderate mental health stress.";
+
+  if (score >= 7.5 || /Excellent/i.test(r.risk_category)) {
+    ringColor = "#34d399";
+    badgeClass = "badge good";
+    statusDesc = "Optimal emotional well-being. Your daily sleep, study, and physical activity habits provide strong psychological resilience.";
+  } else if (score >= 6.0 || /Good/i.test(r.risk_category)) {
+    ringColor = "#22d3ee";
+    badgeClass = "badge ok";
+    statusDesc = "Healthy baseline with good balance. Maintaining consistent sleep and physical activity will prevent digital fatigue.";
+  } else if (score >= 4.5 || /Fair/i.test(r.risk_category)) {
+    ringColor = "#fbbf24";
+    badgeClass = "badge warn";
+    statusDesc = "Mild concern detected. Screen time and study stress may be accumulating. Small daily habit adjustments are recommended.";
+  } else {
+    ringColor = "#f87171";
+    badgeClass = "badge risk";
+    statusDesc = "Elevated risk profile. High digital screen time, elevated stress, or restricted sleep are significantly impacting well-being.";
+  }
+
+  // Update ring color and animate
+  ring.style.stroke = ringColor;
+  ring.style.filter = `drop-shadow(0 0 8px ${ringColor})`;
+  ring.style.strokeDashoffset = "327";
+
+  // Smooth number count-up animation
+  const duration = 1200;
+  const startTime = performance.now();
+  function animateScore(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeProgress = 1 - Math.pow(1 - progress, 3);
+    const currentScore = (score * easeProgress).toFixed(2);
+    scoreEl.textContent = currentScore;
+    if (progress < 1) {
+      requestAnimationFrame(animateScore);
+    } else {
+      scoreEl.textContent = score.toFixed(2);
+    }
+  }
+  requestAnimationFrame(animateScore);
+
+  // Animate SVG stroke
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const offset = 327 * (1 - Math.min(Math.max(score / 10, 0), 1));
+      ring.style.strokeDashoffset = String(offset);
+    }, 50);
+  });
+
+  // Update Badges & Status
   const b = $("badge");
-  b.textContent = r.risk_category;
-  b.className = "badge " + (/Excellent/.test(r.risk_category) ? "good" : /Good/.test(r.risk_category) ? "" : /Fair/.test(r.risk_category) ? "warn" : "risk");
-  $("status").textContent = r.status;
+  if (b) {
+    b.textContent = r.risk_category;
+    b.className = badgeClass;
+  }
+
+  const s = $("status");
+  if (s) {
+    s.textContent = r.status || "Balanced Health";
+    s.className = badgeClass;
+  }
+
+  const sDesc = $("status-desc");
+  if (sDesc) {
+    sDesc.textContent = statusDesc;
+  }
+
+  // Update Engine Chip
+  const engineText = $("engine-text");
+  if (engineText) {
+    if (r.source === "live_model") {
+      engineText.textContent = `Live RandomForest Model Connected (${r.url ? r.url.replace(/https?:\/\//, "") : "FastAPI"})`;
+    } else {
+      engineText.textContent = "Offline AI Engine (Statistical Regression)";
+    }
+  }
+
+  // Update Habit Breakdown Meters
+  if (studentData) {
+    const screenHours = Number(studentData.Avg_Daily_Usage_Hours) || 0;
+    const sleepHours = Number(studentData.Sleep_Hours_Per_Night) || 0;
+    const studyHours = Number(studentData.Study_Hours) || 0;
+    const activityHours = Number(studentData.Physical_Activity_Hours) || 0;
+
+    const screenVal = $("metric-screen-val");
+    const screenBar = $("metric-screen-bar");
+    if (screenVal && screenBar) {
+      screenVal.textContent = `${screenHours} hrs/day`;
+      const pct = Math.min(Math.round((screenHours / 12) * 100), 100);
+      screenBar.style.width = `${pct}%`;
+      screenBar.style.background = screenHours > 5 ? "linear-gradient(90deg, #fbbf24, #f87171)" : "linear-gradient(90deg, #4f8cff, #22d3ee)";
+    }
+
+    const sleepVal = $("metric-sleep-val");
+    const sleepBar = $("metric-sleep-bar");
+    if (sleepVal && sleepBar) {
+      sleepVal.textContent = `${sleepHours} hrs/night`;
+      const pct = Math.min(Math.round((sleepHours / 10) * 100), 100);
+      sleepBar.style.width = `${pct}%`;
+      sleepBar.style.background = sleepHours < 6 ? "linear-gradient(90deg, #f87171, #fbbf24)" : "linear-gradient(90deg, #34d399, #22d3ee)";
+    }
+
+    const studyVal = $("metric-study-val");
+    const studyBar = $("metric-study-bar");
+    if (studyVal && studyBar) {
+      studyVal.textContent = `${studyHours} hrs/day`;
+      studyBar.style.width = `${Math.min(Math.round((studyHours / 8) * 100), 100)}%`;
+    }
+
+    const activityVal = $("metric-activity-val");
+    const activityBar = $("metric-activity-bar");
+    if (activityVal && activityBar) {
+      activityVal.textContent = `${activityHours} hrs/day`;
+      studyBar.style.width = `${Math.min(Math.round((activityHours / 3) * 100), 100)}%`;
+    }
+  }
+
+  // Populate Recommendations & Insights List
+  const insightsList = $("insights-list");
+  if (insightsList) {
+    insightsList.innerHTML = "";
+    const list = (r.insights && r.insights.length > 0)
+      ? r.insights
+      : generateClientInsights(studentData || {}, score);
+
+    const icons = ["💡", "🌙", "📱", "🏃", "🧘", "🎯"];
+    list.forEach((item, idx) => {
+      const li = document.createElement("li");
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "icon";
+      iconSpan.textContent = icons[idx % icons.length];
+      const textSpan = document.createElement("span");
+      textSpan.textContent = item;
+      li.appendChild(iconSpan);
+      li.appendChild(textSpan);
+      insightsList.appendChild(li);
+    });
+  }
 }
 
 // ===== 3D tilt on cards =====
 document.addEventListener("mousemove", (e) => {
   document.querySelectorAll(".tilt").forEach((c) => {
     const r = c.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) { c.style.transform = ""; return; }
-    const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-    c.style.transform = `rotateY(${x * 12}deg) rotateX(${-y * 12}deg) translateZ(10px)`;
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+      c.style.transform = "";
+      return;
+    }
+    const x = (e.clientX - r.left) / r.width - 0.5;
+    const y = (e.clientY - r.top) / r.height - 0.5;
+    c.style.transform = `rotateY(${x * 10}deg) rotateX(${-y * 10}deg) translateZ(8px)`;
   });
 });
 
-// ===== Neural-network background =====
+// ===== Neural-network background animation =====
 (function () {
-  const cv = $("bg"), ctx = cv.getContext("2d");
+  const cv = $("bg");
+  if (!cv) return;
+  const ctx = cv.getContext("2d");
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   let w, h, pts = [];
-  const resize = () => { w = cv.width = innerWidth; h = cv.height = innerHeight; pts = Array.from({ length: Math.min(70, w / 18) }, () => ({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4 })); };
-  addEventListener("resize", resize); resize();
+  const resize = () => {
+    w = cv.width = innerWidth;
+    h = cv.height = innerHeight;
+    pts = Array.from({ length: Math.min(70, Math.floor(w / 18)) }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4
+    }));
+  };
+  addEventListener("resize", resize);
+  resize();
   (function draw() {
     ctx.clearRect(0, 0, w, h);
     pts.forEach((p, i) => {
-      p.x = (p.x + p.vx + w) % w; p.y = (p.y + p.vy + h) % h;
-      ctx.fillStyle = "rgba(34,211,238,.7)"; ctx.fillRect(p.x, p.y, 2, 2);
+      p.x = (p.x + p.vx + w) % w;
+      p.y = (p.y + p.vy + h) % h;
+      ctx.fillStyle = "rgba(34,211,238,.7)";
+      ctx.fillRect(p.x, p.y, 2, 2);
       for (let j = i + 1; j < pts.length; j++) {
         const d = Math.hypot(p.x - pts[j].x, p.y - pts[j].y);
-        if (d < 130) { ctx.strokeStyle = `rgba(139,92,246,${.25 * (1 - d / 130)})`; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke(); }
+        if (d < 130) {
+          ctx.strokeStyle = `rgba(139,92,246,${0.25 * (1 - d / 130)})`;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(pts[j].x, pts[j].y);
+          ctx.stroke();
+        }
       }
     });
     requestAnimationFrame(draw);

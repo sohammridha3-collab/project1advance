@@ -1,99 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MindScope – Student Mental Health Prediction</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MindScope – Student Mental Health Prediction</title>
+<link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-  <canvas id="bg" aria-hidden="true"></canvas>
-  <div class="orb o1"></div>
-  <div class="orb o2"></div>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="orb o1"></div><div class="orb o2"></div>
 
-  <header class="nav">
-    <a class="brand" href="#" onclick="showHome();return false">MindScope</a>
-    <nav><button class="link" onclick="showHome()">Home</button><button class="link"
-        onclick="showAnalysis()">Analysis</button></nav>
-  </header>
+<header class="nav">
+  <a class="brand" href="#" onclick="showHome();return false">MindScope</a>
+  <nav><button class="link" onclick="showHome()">Home</button><button class="link" onclick="showAnalysis()">Analysis</button></nav>
+</header>
 
-  <main>
-    <!-- PAGE 1: HOME -->
-    <section id="page-home" class="page active" aria-label="Home">
-      <div class="hero">
-        <div>
-          <h1>AI-based Student Mental Health Prediction System</h1>
-          <p class="lead">Enter a student's screen time, sleep, study and activity habits. A trained machine-learning
-            model estimates a mental health score and risk category.</p>
-          <button class="btn" onclick="showAnalysis()">Start Analysis</button>
-        </div>
-        <div class="scene" aria-hidden="true">
-          <div class="cube"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
-      </div>
-      <div class="cards">
-        <article class="glass tilt">
-          <h3>1. Enter habits</h3>
-          <p>Social media use, unlocks, study, exercise, sleep and stress level.</p>
-        </article>
-        <article class="glass tilt">
-          <h3>2. Model predicts</h3>
-          <p>A Random Forest pipeline scores the student on a scale of about 1 to 10.</p>
-        </article>
-        <article class="glass tilt">
-          <h3>3. Review result</h3>
-          <p>See the predicted score and its risk category on a dedicated dashboard.</p>
-        </article>
-      </div>
-    </section>
+<main>
+<!-- PAGE 1: HOME -->
+<section id="page-home" class="page active" aria-label="Home">
+  <div class="hero">
+    <div>
+      <h1>AI-based Student Mental Health Prediction System</h1>
+      <p class="lead">Enter a student's screen time, sleep, study and activity habits. A trained machine-learning model estimates a mental health score and risk category.</p>
+      <button class="btn" onclick="showAnalysis()">Start Analysis</button>
+    </div>
+    <div class="scene" aria-hidden="true"><div class="cube"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  </div>
+  <div class="cards">
+    <article class="glass tilt"><h3>1. Enter habits</h3><p>Social media use, unlocks, study, exercise, sleep and stress level.</p></article>
+    <article class="glass tilt"><h3>2. Model predicts</h3><p>A Random Forest pipeline scores the student on a scale of about 1 to 10.</p></article>
+    <article class="glass tilt"><h3>3. Review result</h3><p>See the predicted score and its risk category on a dedicated dashboard.</p></article>
+  </div>
+</section>
 
-    <!-- PAGE 2: ANALYSIS -->
-    <section id="page-analysis" class="page" aria-label="Analysis">
-      <div class="glass panel">
+<!-- PAGE 2: ANALYSIS -->
+<section id="page-analysis" class="page" aria-label="Analysis">
+  <div class="glass panel">
+    <div class="panel-header">
+      <div>
         <h2>Student analysis</h2>
         <p class="muted">Fields marked * are required.</p>
-        <div id="error" class="error" role="alert" hidden></div>
-        <form id="form" novalidate></form>
-        <div class="actions">
-          <button class="btn" id="analyze" type="submit" form="form">Analyze</button>
-          <button class="btn ghost" id="reset" type="button">Clear</button>
-        </div>
       </div>
-      <div id="loader" class="loader" hidden>
-        <div class="core"><span></span><span></span><span></span></div>
-        <p>Analyzing student data...</p>
-      </div>
-    </section>
+      <button class="btn-sample" id="sample-btn" type="button" onclick="fillSampleData()">⚡ Fill Sample Student</button>
+    </div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <form id="form" novalidate></form>
+    <div class="actions">
+      <button class="btn" id="analyze" type="submit" form="form">Analyze</button>
+      <button class="btn ghost" id="reset" type="button">Clear</button>
+    </div>
+  </div>
+  <div id="loader" class="loader" hidden>
+    <div class="core"><span></span><span></span><span></span></div>
+    <p>Analyzing student data...</p>
+  </div>
+</section>
 
-    <!-- PAGE 3: RESULT -->
-    <section id="page-result" class="page" aria-label="Result">
-      <div class="results">
-        <div class="glass tilt rcard">
-          <h3>Predicted mental health score</h3>
-          <div class="gauge"><svg viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="52" class="track" />
-              <circle id="ring" cx="60" cy="60" r="52" class="fill" />
-            </svg><b id="score">–</b></div>
-          <p class="muted">out of 10</p>
-        </div>
-        <div class="glass tilt rcard">
-          <h3>Risk category</h3>
-          <span id="badge" class="badge">–</span>
-          <h3 class="mt">Status</h3>
-          <span id="status" class="badge ok">–</span>
-        </div>
-      </div>
-      <div class="actions center">
-        <button class="btn" onclick="showAnalysis()">Analyze Again</button>
-        <button class="btn ghost" onclick="showHome()">Back to Home</button>
-      </div>
-    </section>
-  </main>
+<!-- PAGE 3: RESULT -->
+<section id="page-result" class="page" aria-label="Result">
+  <div style="text-align:center; margin-bottom: 20px;">
+    <div id="engine-chip" class="engine-chip">
+      <span class="dot"></span>
+      <span id="engine-text">Live RandomForest Model Connected</span>
+    </div>
+    <h2>Mental Health Impact Assessment</h2>
+  </div>
 
-  <footer>MindScope · Educational tool, not a medical diagnosis.</footer>
-  <script src="script.js"></script>
+  <div class="results">
+    <!-- Card 1: Score & Gauge -->
+    <div class="glass tilt rcard">
+      <h3>Predicted Score</h3>
+      <div class="gauge">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" class="track"/>
+          <circle id="ring" cx="60" cy="60" r="52" class="fill"/>
+        </svg>
+        <b id="score">–</b>
+      </div>
+      <p class="muted">Scale: 1.0 (High Concern) to 10.0 (High Well-Being)</p>
+    </div>
+
+    <!-- Card 2: Risk & Status -->
+    <div class="glass tilt rcard">
+      <h3>Risk Category</h3>
+      <div><span id="badge" class="badge">–</span></div>
+      <h3 class="mt">Well-Being Status</h3>
+      <div><span id="status" class="badge ok">–</span></div>
+      <p id="status-desc" class="muted mt-sm">–</p>
+    </div>
+
+    <!-- Card 3: Habit Metrics Breakdown -->
+    <div class="glass tilt rcard">
+      <h3>Habit Breakdown</h3>
+      <div class="metric-bars">
+        <div class="metric-item">
+          <div class="metric-item-head">
+            <span>Social Media</span>
+            <span id="metric-screen-val">–</span>
+          </div>
+          <div class="metric-track"><div id="metric-screen-bar" class="metric-val" style="width:0%"></div></div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-item-head">
+            <span>Sleep Duration</span>
+            <span id="metric-sleep-val">–</span>
+          </div>
+          <div class="metric-track"><div id="metric-sleep-bar" class="metric-val" style="width:0%"></div></div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-item-head">
+            <span>Daily Study</span>
+            <span id="metric-study-val">–</span>
+          </div>
+          <div class="metric-track"><div id="metric-study-bar" class="metric-val" style="width:0%"></div></div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-item-head">
+            <span>Physical Activity</span>
+            <span id="metric-activity-val">–</span>
+          </div>
+          <div class="metric-track"><div id="metric-activity-bar" class="metric-val" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: AI Recommendations & Insights -->
+    <div class="glass rcard full-width">
+      <h3>Personalized Recommendations & Lifestyle Insights</h3>
+      <ul id="insights-list" class="insights-list">
+        <li><span class="icon">💡</span><span>Loading recommendations...</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="actions center">
+    <button class="btn" onclick="showAnalysis()">Analyze Again</button>
+    <button class="btn ghost" onclick="showHome()">Back to Home</button>
+  </div>
+</section>
+</main>
+
+<footer>MindScope · Educational tool, not a medical diagnosis.</footer>
+<script src="script.js"></script>
 </body>
-
 </html>

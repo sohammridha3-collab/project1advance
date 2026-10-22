@@ -67,8 +67,20 @@ app = FastAPI(
 local_frontend_origins = [
     "http://localhost:5500",
     "http://127.0.0.1:5500",
+    "http://localhost:5501",
+    "http://127.0.0.1:5501",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "null",
 ]
 production_frontend_origins = [
+    "https://project1adv.onrender.com",
+    "https://project1advance.onrender.com",
+] + [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
@@ -80,6 +92,7 @@ if "*" in production_frontend_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=local_frontend_origins + production_frontend_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -244,7 +257,8 @@ class PredictionResult(BaseModel):
     risk_category: str = Field(
         ..., description="Interpreted category based on predicted score", examples=["Good / Moderate"]
     )
-    status: str = Field(default="success", examples=["success"])
+    status: str = Field(default="Balanced Health", examples=["Balanced Health"])
+    insights: List[str] = Field(default_factory=list, description="Tailored insights and recommendations")
 
 
 class BatchPredictionRequest(BaseModel):
@@ -267,6 +281,65 @@ def categorize_mental_health(score: float) -> str:
         return "Fair / Mild Concern"
     else:
         return "Poor / High Risk"
+
+
+def interpret_status(score: float) -> str:
+    """Interprets mental health score into a human-readable well-being status."""
+    if score >= 7.5:
+        return "Optimal Well-Being"
+    elif score >= 6.0:
+        return "Balanced Health"
+    elif score >= 4.5:
+        return "Mild Fatigue Concern"
+    else:
+        return "High Risk / Attention Recommended"
+
+
+def generate_insights(student: StudentInput, score: float) -> List[str]:
+    """Generates personalized, evidence-based recommendations based on student habits."""
+    insights: List[str] = []
+
+    if student.Avg_Daily_Usage_Hours >= 5.0:
+        insights.append(
+            f"High social media usage ({student.Avg_Daily_Usage_Hours}h/day) contributes significantly to digital burnout. Try trimming daily usage by 1–2 hours."
+        )
+    elif student.Avg_Daily_Usage_Hours <= 2.5:
+        insights.append(
+            f"Mindful social media usage ({student.Avg_Daily_Usage_Hours}h/day) strongly protects focus and emotional health."
+        )
+
+    if student.Sleep_Hours_Per_Night < 6.0:
+        insights.append(
+            f"Sleep duration ({student.Sleep_Hours_Per_Night}h/night) is below recommended levels. Targeting 7–8 hours will markedly improve resilience and focus."
+        )
+    elif student.Sleep_Hours_Per_Night >= 7.0:
+        insights.append(
+            f"Consistent healthy sleep schedule ({student.Sleep_Hours_Per_Night}h/night) is your top protective asset."
+        )
+
+    if student.Daily_Unlocks >= 180:
+        insights.append(
+            f"Frequent phone unlocks ({student.Daily_Unlocks}/day) disrupt deep study sessions. Try app-blocking timers during study blocks."
+        )
+
+    if student.Physical_Activity_Hours < 1.0:
+        insights.append(
+            "Low physical activity detected. Even 20–30 minutes of daily aerobic movement or brisk walking elevates mood and cognitive stamina."
+        )
+    elif student.Physical_Activity_Hours >= 2.0:
+        insights.append(
+            "Active lifestyle and physical fitness reinforce neuroplasticity and emotional equilibrium."
+        )
+
+    if student.Stress_Level in [StressLevelEnum.high, StressLevelEnum.very_high]:
+        insights.append(
+            f"Reported {student.Stress_Level.value.lower()} stress. Incorporate short mindful breathing breaks and connect with student counseling or academic advisors."
+        )
+
+    if not insights:
+        insights.append("Your daily lifestyle habits maintain positive balance across study, activity, and digital usage.")
+
+    return insights
 
 
 def prepare_features(student: StudentInput) -> dict:
@@ -319,6 +392,8 @@ def health_check():
     """Health check endpoint to verify server and model status."""
     return {
         "status": "healthy",
+        "app": "MindScope",
+        "service": "Student Mental Health Prediction",
         "model_loaded": model is not None,
         "model_file_exists": os.path.exists(MODEL_FILE),
     }
@@ -354,11 +429,15 @@ def predict_single(data: StudentInput):
         input_df = pd.DataFrame([feature_dict])
         prediction = float(model.predict(input_df)[0])
         prediction = round(prediction, 2)
+        category = categorize_mental_health(prediction)
+        status_text = interpret_status(prediction)
+        insights_list = generate_insights(data, prediction)
 
         return PredictionResult(
             predicted_mental_health_score=prediction,
-            risk_category=categorize_mental_health(prediction),
-            status="success",
+            risk_category=category,
+            status=status_text,
+            insights=insights_list,
         )
     except Exception as e:
         logger.error(f"Inference error: {e}", exc_info=True)
@@ -389,13 +468,15 @@ def predict_batch(batch_data: BatchPredictionRequest):
         predictions = model.predict(input_df)
 
         results = []
-        for pred in predictions:
+        for i, pred in enumerate(predictions):
             score = round(float(pred), 2)
+            student_data = batch_data.students[i]
             results.append(
                 PredictionResult(
                     predicted_mental_health_score=score,
                     risk_category=categorize_mental_health(score),
-                    status="success",
+                    status=interpret_status(score),
+                    insights=generate_insights(student_data, score),
                 )
             )
 
@@ -409,6 +490,19 @@ def predict_batch(batch_data: BatchPredictionRequest):
 
 
 if __name__ == "__main__":
+    import socket
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    def is_port_in_use(port_num: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(("127.0.0.1", port_num)) == 0
+
+    env_port = os.getenv("PORT")
+    if env_port:
+        target_port = int(env_port)
+    else:
+        # Check if 8000 is available; if already taken by another service (e.g. project2advance), use 8001
+        target_port = 8000 if not is_port_in_use(8000) else 8001
+
+    logger.info(f"Starting MindScope API service on http://127.0.0.1:{target_port}")
+    uvicorn.run("main:app", host="0.0.0.0", port=target_port, reload=True)
