@@ -192,7 +192,7 @@ function generateClientInsights(student, score) {
   const insights = [];
 
   if (student.Avg_Daily_Usage_Hours >= 5.0) {
-    insights.append ? null : insights.push(
+    insights.push(
       `High social media screen time (${student.Avg_Daily_Usage_Hours}h/day) contributes heavily to mental fatigue. Trimming 1–2 hours daily noticeably boosts well-being.`
     );
   } else if (student.Avg_Daily_Usage_Hours <= 2.5) {
@@ -467,7 +467,7 @@ function renderResult(r, studentData) {
     const activityBar = $("metric-activity-bar");
     if (activityVal && activityBar) {
       activityVal.textContent = `${activityHours} hrs/day`;
-      studyBar.style.width = `${Math.min(Math.round((activityHours / 3) * 100), 100)}%`;
+      activityBar.style.width = `${Math.min(Math.round((activityHours / 3) * 100), 100)}%`;
     }
   }
 
