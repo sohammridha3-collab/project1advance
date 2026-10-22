@@ -13,8 +13,8 @@ body{background:radial-gradient(circle at 20% 0,#14183d,var(--bg) 60%);color:var
 .link{background:none;border:0;color:var(--mu);font:inherit;margin-left:18px;cursor:pointer}.link:hover{color:var(--tx)}
 main{padding:32px 5vw;min-height:80vh;perspective:1200px}
 .page{display:none}
-.page.active{display:block;animation:enter .6s ease both}
-@keyframes enter{from{opacity:0;transform:translateY(24px) rotateX(8deg)}to{opacity:1;transform:none}}
+.page.active{display:block;animation:enter .22s ease both}
+@keyframes enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .hero{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center;min-height:55vh}
 h1{font-size:clamp(2rem,4.5vw,3.4rem);line-height:1.15;margin-bottom:16px}
 .lead{color:var(--mu);max-width:56ch;margin-bottom:28px}
@@ -63,7 +63,7 @@ input.bad,select.bad{border-color:#f87171}
 .gauge{position:relative;width:180px;height:180px;margin:16px auto 4px}
 .gauge svg{transform:rotate(-90deg);width:100%}
 .gauge circle{fill:none;stroke-width:9}.track{stroke:var(--bd)}
-.fill{stroke:var(--c3);stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset 1.4s cubic-bezier(0.4, 0, 0.2, 1), stroke .5s ease;filter:drop-shadow(0 0 6px var(--c3))}
+.fill{stroke:var(--c3);stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset .45s cubic-bezier(0.16, 1, 0.3, 1), stroke .25s ease;filter:drop-shadow(0 0 6px var(--c3))}
 .gauge b{position:absolute;inset:0;display:grid;place-items:center;font-size:2.6rem;font-variant-numeric:tabular-nums}
 .badge{display:inline-block;margin-top:12px;padding:8px 18px;border-radius:999px;font-weight:600;background:rgba(34,211,238,.15);border:1px solid var(--c3);color:var(--c3);box-shadow:0 0 15px rgba(34,211,238,.15)}
 .badge.good{background:rgba(52,211,153,.15);border-color:#34d399;color:#34d399;box-shadow:0 0 15px rgba(52,211,153,.15)}
@@ -76,7 +76,7 @@ input.bad,select.bad{border-color:#f87171}
 .metric-item{display:flex;flex-direction:column;gap:5px}
 .metric-item-head{display:flex;justify-content:space-between;font-size:.84rem;color:var(--mu)}
 .metric-track{height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;position:relative}
-.metric-val{height:100%;border-radius:4px;transition:width 1s cubic-bezier(0.4, 0, 0.2, 1);background:linear-gradient(90deg,var(--c1),var(--c3))}
+.metric-val{height:100%;border-radius:4px;transition:width .4s cubic-bezier(0.16, 1, 0.3, 1);background:linear-gradient(90deg,var(--c1),var(--c3))}
 .insights-list{list-style:none;padding:0;margin:16px 0 0;display:flex;flex-direction:column;gap:12px;text-align:left}
 .insights-list li{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);font-size:.92rem;line-height:1.5;color:var(--tx)}
 .insights-list li .icon{font-size:1.25rem;flex-shrink:0}

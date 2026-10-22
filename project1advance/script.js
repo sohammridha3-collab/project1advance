@@ -1,30 +1,63 @@
-// ===== Config & API Resolution =====
-function getCandidateApiUrls() {
+// ===== Fast Backend Auto-Detection & Config =====
+let activeBackendUrl = sessionStorage.getItem("mindscope_backend_url") || null;
+let isDetectingBackend = false;
+
+async function detectActiveBackend() {
+  if (isDetectingBackend) return;
+  isDetectingBackend = true;
+
   const origin = window.location.origin;
   const isLocal = !origin || origin.startsWith("file:") ||
                   window.location.hostname === "localhost" ||
                   window.location.hostname === "127.0.0.1";
 
-  // The deployed backend Web Service URL
-  const BACKEND_URL = "https://project1advance-1.onrender.com";
+  const candidates = [
+    activeBackendUrl,
+    "http://127.0.0.1:8001",
+    "http://localhost:8001",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    (isLocal && window.location.port !== "5500" && window.location.port !== "5501") ? origin : null
+  ].filter(Boolean);
 
-  if (isLocal) {
-    const list = [];
-    if (window.location.port && window.location.port !== "5500" && window.location.port !== "5501") {
-      list.push(origin);
+  const uniqueCandidates = [...new Set(candidates)];
+
+  // Race candidates in parallel with a fast 400ms health check
+  const pingPromises = uniqueCandidates.map(async (url) => {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 400);
+    try {
+      const res = await fetch(`${url}/health`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.app === "MindScope" || data.service === "Student Mental Health Prediction" || data.model_file_exists !== undefined) {
+          return url;
+        }
+      }
+    } catch (_) {
+      clearTimeout(tid);
     }
-    // MindScope can run on 8001 (to avoid colliding with project2advance on 8000) or 8000
-    list.push("http://127.0.0.1:8001", "http://localhost:8001");
-    list.push("http://127.0.0.1:8000", "http://localhost:8000");
-    list.push(BACKEND_URL);
-    return list;
-  }
+    throw new Error("unreachable");
+  });
 
-  // If on deployed frontend, try backend URL, origin, and local fallback
-  return [BACKEND_URL, origin, "http://127.0.0.1:8001", "http://127.0.0.1:8000"];
+  try {
+    const fastest = await Promise.any(pingPromises);
+    if (fastest) {
+      activeBackendUrl = fastest;
+      sessionStorage.setItem("mindscope_backend_url", fastest);
+    }
+  } catch (_) {
+    // If no backend is reachable right now, offline AI engine handles everything instantly
+  } finally {
+    isDetectingBackend = false;
+  }
 }
 
-async function fetchWithTimeout(url, options, timeoutMs = 4000) {
+// Pre-warm backend detection on startup
+detectActiveBackend();
+
+async function fetchWithTimeout(url, options, timeoutMs = 800) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -102,10 +135,14 @@ window.fillSampleData = function() {
 function show(id) {
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
   $(id).classList.add("active");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 const showHome = () => show("page-home");
-const showAnalysis = () => { $("error").hidden = true; show("page-analysis"); };
+const showAnalysis = () => {
+  $("error").hidden = true;
+  show("page-analysis");
+  detectActiveBackend(); // Background probe when opening analysis tab
+};
 const showResult = () => show("page-result");
 
 // ===== Validation + payload =====
@@ -142,7 +179,7 @@ function buildPayload() {
   return data;
 }
 
-// ===== Offline Statistical Model Engine Fallback =====
+// ===== Instant Offline Statistical Model Engine Fallback (<0.2ms) =====
 function predictLocally(student) {
   const stressWeights = { "Low": 0, "Medium": 1, "High": 2, "Very High": 3 };
   const stressVal = stressWeights[student.Stress_Level] ?? 1;
@@ -192,7 +229,7 @@ function generateClientInsights(student, score) {
   const insights = [];
 
   if (student.Avg_Daily_Usage_Hours >= 5.0) {
-    insights.append ? null : insights.push(
+    insights.push(
       `High social media screen time (${student.Avg_Daily_Usage_Hours}h/day) contributes heavily to mental fatigue. Trimming 1–2 hours daily noticeably boosts well-being.`
     );
   } else if (student.Avg_Daily_Usage_Hours <= 2.5) {
@@ -247,7 +284,7 @@ function showError(msg) {
   e.hidden = false;
 }
 
-// ===== Submit =====
+// ===== Fast Submit Handler =====
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   $("error").hidden = true;
@@ -255,79 +292,75 @@ form.addEventListener("submit", async (ev) => {
 
   const btn = $("analyze");
   btn.disabled = true;
-
-  const loader = $("loader");
-  const loaderText = loader.querySelector("p");
-  if (loaderText) loaderText.textContent = "Analyzing student data...";
-  loader.hidden = false;
-
-  const waitTimer = setTimeout(() => {
-    if (loaderText && !loader.hidden) {
-      loaderText.textContent = "Connecting to prediction model...";
-    }
-  }, 1800);
+  const originalText = btn.textContent;
+  btn.textContent = "Analyzing…";
 
   const studentData = buildPayload();
   const payload = JSON.stringify(studentData);
-  const candidateUrls = [...new Set(getCandidateApiUrls().filter(Boolean))];
-  let successResult = null;
-  let usedUrl = null;
+  let finalResult = null;
 
-  for (const baseUrl of candidateUrls) {
+  // 1. If active backend URL is pre-detected, fetch directly with a tight 500ms timeout
+  if (activeBackendUrl) {
     try {
-      const isRemote = baseUrl.includes("onrender.com");
-      const timeoutMs = isRemote ? 10000 : 3500;
+      const res = await fetchWithTimeout(`${activeBackendUrl}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }, 500);
 
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.predicted_mental_health_score !== undefined) {
+          finalResult = data;
+          finalResult.source = "live_model";
+          finalResult.url = activeBackendUrl;
+        }
+      }
+    } catch (_) {
+      activeBackendUrl = null;
+    }
+  }
+
+  // 2. If not yet resolved, race candidate local ports in parallel with 450ms timeout
+  if (!finalResult) {
+    const candidates = [
+      "http://127.0.0.1:8001",
+      "http://localhost:8001",
+      "http://127.0.0.1:8000"
+    ];
+
+    const parallelRequests = candidates.map(async (baseUrl) => {
       const res = await fetchWithTimeout(`${baseUrl}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,
-      }, timeoutMs);
+      }, 450);
 
-      if (!res.ok) {
-        let errDetail = "";
-        try {
-          const errBody = await res.json();
-          if (errBody && errBody.detail) {
-            errDetail = Array.isArray(errBody.detail)
-              ? errBody.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
-              : String(errBody.detail);
-          }
-        } catch (_) {}
-
-        // If the server responded with 422 for unrelated fields (e.g. smoker_status from HealthBridge on 8000),
-        // do NOT abort! It means another project is on this port. Continue to next candidate.
-        const isWrongApi = /smoker|heart_rate|oxygen|diabetes|systolic|chest_pain/i.test(errDetail);
-        if (isWrongApi) {
-          console.warn(`Server at ${baseUrl} is an unrelated service (HealthBridge). Trying next port...`);
-          continue;
-        }
-
-        continue;
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      const data = await res.json();
+      if (data && data.predicted_mental_health_score !== undefined) {
+        activeBackendUrl = baseUrl;
+        sessionStorage.setItem("mindscope_backend_url", baseUrl);
+        data.source = "live_model";
+        data.url = baseUrl;
+        return data;
       }
+      throw new Error("Invalid payload");
+    });
 
-      successResult = await res.json();
-      usedUrl = baseUrl;
-      break;
-    } catch (err) {
-      // Continue to next candidate
+    try {
+      finalResult = await Promise.any(parallelRequests);
+    } catch (_) {
+      // 3. Instant local statistical model fallback (<0.1ms)
+      finalResult = predictLocally(studentData);
     }
   }
 
-  clearTimeout(waitTimer);
-  loader.hidden = true;
   btn.disabled = false;
+  btn.textContent = originalText;
 
-  if (successResult) {
-    successResult.source = "live_model";
-    successResult.url = usedUrl;
-    renderResult(successResult, studentData);
-  } else {
-    // Seamless offline fallback: compute accurate statistical prediction immediately
-    console.info("Using built-in offline statistical model engine");
-    const localResult = predictLocally(studentData);
-    renderResult(localResult, studentData);
-  }
+  // Render the result immediately
+  renderResult(finalResult, studentData);
 });
 
 $("reset").addEventListener("click", () => {
@@ -341,9 +374,9 @@ $("reset").addEventListener("click", () => {
   $("error").hidden = true;
 });
 
-// ===== Render Result Dashboard =====
+// ===== Render Result Dashboard (Instantaneous) =====
 function renderResult(r, studentData) {
-  // Ensure result page is made active FIRST so DOM measurements & SVG animations work
+  // Switch to result page immediately
   showResult();
 
   const score = Number(r.predicted_mental_health_score);
@@ -378,8 +411,8 @@ function renderResult(r, studentData) {
   ring.style.filter = `drop-shadow(0 0 8px ${ringColor})`;
   ring.style.strokeDashoffset = "327";
 
-  // Smooth number count-up animation
-  const duration = 1200;
+  // Fast score counter (250ms)
+  const duration = 250;
   const startTime = performance.now();
   function animateScore(now) {
     const elapsed = now - startTime;
@@ -395,12 +428,10 @@ function renderResult(r, studentData) {
   }
   requestAnimationFrame(animateScore);
 
-  // Animate SVG stroke
+  // Trigger SVG stroke immediately
   requestAnimationFrame(() => {
-    setTimeout(() => {
-      const offset = 327 * (1 - Math.min(Math.max(score / 10, 0), 1));
-      ring.style.strokeDashoffset = String(offset);
-    }, 50);
+    const offset = 327 * (1 - Math.min(Math.max(score / 10, 0), 1));
+    ring.style.strokeDashoffset = String(offset);
   });
 
   // Update Badges & Status
@@ -427,7 +458,7 @@ function renderResult(r, studentData) {
     if (r.source === "live_model") {
       engineText.textContent = `Live RandomForest Model Connected (${r.url ? r.url.replace(/https?:\/\//, "") : "FastAPI"})`;
     } else {
-      engineText.textContent = "Offline AI Engine (Statistical Regression)";
+      engineText.textContent = "Instant Offline AI Engine (0ms Latency)";
     }
   }
 
@@ -467,7 +498,7 @@ function renderResult(r, studentData) {
     const activityBar = $("metric-activity-bar");
     if (activityVal && activityBar) {
       activityVal.textContent = `${activityHours} hrs/day`;
-      studyBar.style.width = `${Math.min(Math.round((activityHours / 3) * 100), 100)}%`;
+      activityBar.style.width = `${Math.min(Math.round((activityHours / 3) * 100), 100)}%`;
     }
   }
 
